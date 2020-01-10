@@ -14,19 +14,21 @@ DEFS = "-DHAVE_LIBAUDIT=1"
 
 ARTEFACTS = pam_unix_others.so unix_others_chkpwd
 
-PAM_UNIX_OTHERS_os = bigcrypt.o pam_unix_acct.o pam_unix_auth.o pam_unix_passwd.o pam_unix_sess.o support.o passverify.o yppasswd_xdr.o md5_good.o md5_broken.o
+PAM_UNIX_OTHERS_os = bigcrypt.o pam_unix_auth.o  support.o passverify.o yppasswd_xdr.o md5_good.o md5_broken.o
 CKPWD_os =  md5_good.hlpr_o md5_broken.hlpr_o bigcrypt.hlpr_o passverify.hlpr_o unix_chkpwd.hlpr_o
 
 
-.PHONY: all clean nice defchklist
+.PHONY: all clean nice defchklist deflist 
 
-all: clean unix_others_chpwd pam_unix_others.so
+all: clean artefacts
 
 clean:
 	rm -rf *.o **/*.o *.hlpr_o **/*.hlpr_o $(ARTEFACTS)
 
 nice:
 	#clang-format -i -style=Chromium *.c **/*.c *.h **/*.h
+	
+artefacts: $(ARTEFACTS)
 
 unix_others_chkpwd: $(CKPWD_os)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(DEFS) -o $@ $^
