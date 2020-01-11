@@ -18,15 +18,6 @@ is_pwd_shadowed(const struct passwd *pwd);
 char *
 crypt_md5_wrapper(const char *pass_new);
 
-int
-unix_selinux_confined(void);
-
-int
-lock_pwdf(void);
-
-void
-unlock_pwdf(void);
-
 #ifdef HELPER_COMPILE
 int
 save_old_password(const char *forwho, const char *oldpass,
@@ -76,12 +67,6 @@ PAMH_ARG_DECL(int get_pwd_hash,
 
 PAMH_ARG_DECL(int check_shadow_expiry,
 	struct spwd *spent, int *daysleft);
-
-PAMH_ARG_DECL(int unix_update_passwd,
-	const char *forwho, const char *towhat);
-
-PAMH_ARG_DECL(int unix_update_shadow,
-	const char *forwho, char *towhat);
 
 /* ****************************************************************** *
  * Copyright (c) Red Hat, Inc. 2007.

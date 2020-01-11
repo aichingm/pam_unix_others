@@ -31,6 +31,11 @@
 #include "support.h"
 #include "passverify.h"
 
+char *
+pam_modutil_search_key(pam_handle_t *pamh UNUSED,
+		       const char *file_name,
+		       const char *key);
+
 /* lookup a value for key in login.defs file or similar key value format */
 char *
 pam_modutil_search_key(pam_handle_t *pamh UNUSED,
@@ -41,6 +46,7 @@ pam_modutil_search_key(pam_handle_t *pamh UNUSED,
 	char *buf = NULL;
 	size_t buflen = 0;
 	char *retval = NULL;
+  char *empty = '\0';
 
 #ifdef USE_ECONF
 	if (strcmp (file_name, LOGIN_DEFS) == 0)
@@ -96,7 +102,7 @@ pam_modutil_search_key(pam_handle_t *pamh UNUSED,
 			while (isspace((int)*cp) || *cp == '=')
 				++cp;
 		else
-			cp = "";
+			cp = empty;
 
 		if (strcasecmp(tmp, key) == 0) {
 			retval = strdup(cp);
@@ -381,7 +387,7 @@ static void _unix_cleanup(pam_handle_t *pamh UNUSED, void *data, int error_statu
 }
 
 int _unix_getpwnam(pam_handle_t *pamh, const char *name,
-		   int files, int nis, struct passwd **ret)
+		   int files, int nis UNUSED, struct passwd **ret)
 {
 	FILE *passwd;
 	char buf[16384];
@@ -408,30 +414,6 @@ int _unix_getpwnam(pam_handle_t *pamh, const char *name,
 			fclose(passwd);
 		}
 	}
-
-#if defined(HAVE_YP_GET_DEFAULT_DOMAIN) && defined (HAVE_YP_BIND) && defined (HAVE_YP_MATCH) && defined (HAVE_YP_UNBIND)
-	if (!matched && nis) {
-		char *userinfo = NULL, *domain = NULL;
-		int len = 0, i;
-		len = yp_get_default_domain(&domain);
-		if (len == YPERR_SUCCESS) {
-			len = yp_bind(domain);
-		}
-		if (len == YPERR_SUCCESS) {
-			i = yp_match(domain, "passwd.byname", name,
-				     strlen(name), &userinfo, &len);
-			yp_unbind(domain);
-			if ((i == YPERR_SUCCESS) && ((size_t)len < sizeof(buf))) {
-				strncpy(buf, userinfo, sizeof(buf) - 1);
-				buf[sizeof(buf) - 1] = '\0';
-				matched = 1;
-			}
-		}
-	}
-#else
-	/* we don't have NIS support, make compiler happy. */
-	nis = 0;
-#endif
 
 	if (matched && (ret != NULL)) {
 		*ret = NULL;
@@ -572,7 +554,6 @@ static int _unix_run_helper_binary(pam_handle_t *pamh, const char *passwd,
     child = fork();
     if (child == 0) {
 	static char *envp[] = { NULL };
-	const char *args[] = { NULL, NULL, NULL, NULL };
 
 	/* XXX - should really tidy up PAM here too */
 
@@ -597,16 +578,7 @@ static int _unix_run_helper_binary(pam_handle_t *pamh, const char *passwd,
           }
 	}
 
-	/* exec binary helper */
-	args[0] = CHKPWD_HELPER;
-	args[1] = user;
-	if (off(UNIX__NONULL, ctrl)) {	/* this means we've succeeded */
-	  args[2]="nullok";
-	} else {
-	  args[2]="nonull";
-	}
-
-	execve(CHKPWD_HELPER, (char *const *) args, envp);
+	execle("/usr/local/bin/"CHKPWD_HELPER, CHKPWD_HELPER, user, off(UNIX__NONULL, ctrl)?"nullok":"nonull", NULL, envp);
 
 	/* should not get here: exit with error */
 	D(("helper binary is not available"));

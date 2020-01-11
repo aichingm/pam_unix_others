@@ -45,10 +45,6 @@
 #include <security/pam_ext.h>
 #endif
 
-#if defined(USE_LCKPWDF) && !defined(HAVE_LCKPWDF)
-# include "./lckpwdf.-c"
-#endif
-
 static void
 strip_hpux_aging(char *hash)
 {
@@ -189,6 +185,8 @@ is_pwd_shadowed(const struct passwd *pwd)
 	return 0;
 }
 
+#define chk0retCRED_INS(x) if(x != 0){return PAM_CRED_INSUFFICIENT; }
+
 PAMH_ARG_DECL(int get_account_info,
 	const char *name, struct passwd **pwd, struct spwd **spwdent)
 {
@@ -197,36 +195,36 @@ PAMH_ARG_DECL(int get_account_info,
 	*spwdent = NULL;
 
 	if (*pwd != NULL) {
-		if (strcmp((*pwd)->pw_passwd, "*NP*") == 0)
-		{ /* NIS+ */
+		if (strcmp((*pwd)->pw_passwd, "*NP*") == 0) { /* NIS+ */
 #ifdef HELPER_COMPILE
 			uid_t save_euid, save_uid;
 
 			save_euid = geteuid();
 			save_uid = getuid();
-			if (save_uid == (*pwd)->pw_uid)
-				setreuid(save_euid, save_uid);
-			else  {
-				setreuid(0, -1);
+			if (save_uid == (*pwd)->pw_uid){
+				chk0retCRED_INS(setreuid(save_euid, save_uid));
+      } else {
+				chk0retCRED_INS(setreuid(0, -1));
 				if (setreuid(-1, (*pwd)->pw_uid) == -1) {
-					setreuid(-1, 0);
-					setreuid(0, -1);
+					chk0retCRED_INS(setreuid(-1, 0));
+					chk0retCRED_INS(setreuid(0, -1));
 					if(setreuid(-1, (*pwd)->pw_uid) == -1)
 						return PAM_CRED_INSUFFICIENT;
 				}
 			}
 
 			*spwdent = pam_modutil_getspnam(pamh, name);
-			if (save_uid == (*pwd)->pw_uid)
-				setreuid(save_uid, save_euid);
-			else {
-				setreuid(-1, 0);
-				setreuid(save_uid, -1);
-				setreuid(-1, save_euid);
+			if (save_uid == (*pwd)->pw_uid){
+				chk0retCRED_INS(setreuid(save_uid, save_euid));
+      } else {
+				chk0retCRED_INS(setreuid(-1, 0));
+				chk0retCRED_INS(setreuid(save_uid, -1));
+				chk0retCRED_INS(setreuid(-1, save_euid));
 			}
 
-			if (*spwdent == NULL || (*spwdent)->sp_pwdp == NULL)
+			if (*spwdent == NULL || (*spwdent)->sp_pwdp == NULL){
 				return PAM_AUTHINFO_UNAVAIL;
+      }
 #else
 			/* we must run helper for NIS+ passwords */
 			return PAM_UNIX_RUN_HELPER;
@@ -237,12 +235,14 @@ PAMH_ARG_DECL(int get_account_info,
 			 * if shadowing is enabled
 			 */
 #ifndef HELPER_COMPILE
-			if (geteuid() || SELINUX_ENABLED)
+			if (geteuid() || SELINUX_ENABLED) {
 				return PAM_UNIX_RUN_HELPER;
+      }
 #endif
 			*spwdent = pam_modutil_getspnam(pamh, name);
-			if (*spwdent == NULL || (*spwdent)->sp_pwdp == NULL)
+			if (*spwdent == NULL || (*spwdent)->sp_pwdp == NULL) {
 				return PAM_AUTHINFO_UNAVAIL;
+      }
 		}
 	} else {
 		return PAM_USER_UNKNOWN;
@@ -517,561 +517,6 @@ PAMH_ARG_DECL(char * create_password_hash,
 	free(cdata);
 #endif
 	return sp;
-}
-
-#ifdef WITH_SELINUX
-int
-unix_selinux_confined(void)
-{
-    static int confined = -1;
-    int fd;
-    char tempfile[]="/etc/.pwdXXXXXX";
-
-    if (confined != -1)
-	return confined;
-
-    /* cannot be confined without SELinux enabled */
-    if (!SELINUX_ENABLED){
-	confined = 0;
-	return confined;
-    }
-
-    /* let's try opening shadow read only */
-    if ((fd=open("/etc/shadow", O_RDONLY)) != -1) {
-        close(fd);
-        confined = 0;
-        return confined;
-    }
-
-    if (errno == EACCES) {
-	confined = 1;
-	return confined;
-    }
-
-    /* shadow opening failed because of other reasons let's try
-       creating a file in /etc */
-    if ((fd=mkstemp(tempfile)) != -1) {
-        unlink(tempfile);
-        close(fd);
-        confined = 0;
-        return confined;
-    }
-
-    confined = 1;
-    return confined;
-}
-
-#else
-int
-unix_selinux_confined(void)
-{
-    return 0;
-}
-#endif
-
-#ifdef USE_LCKPWDF
-int
-lock_pwdf(void)
-{
-        int i;
-        int retval;
-
-#ifndef HELPER_COMPILE
-        if (unix_selinux_confined()) {
-                return PAM_SUCCESS;
-        }
-#endif
-        /* These values for the number of attempts and the sleep time
-           are, of course, completely arbitrary.
-           My reading of the PAM docs is that, once pam_chauthtok() has been
-           called with PAM_UPDATE_AUTHTOK, we are obliged to take any
-           reasonable steps to make sure the token is updated; so retrying
-           for 1/10 sec. isn't overdoing it. */
-        i=0;
-        while((retval = lckpwdf()) != 0 && i < 100) {
-                usleep(1000);
-                i++;
-        }
-        if(retval != 0) {
-                return PAM_AUTHTOK_LOCK_BUSY;
-        }
-        return PAM_SUCCESS;
-}
-
-void
-unlock_pwdf(void)
-{
-#ifndef HELPER_COMPILE
-        if (unix_selinux_confined()) {
-                return;
-        }
-#endif
-        ulckpwdf();
-}
-#else
-int
-lock_pwdf(void)
-{
-	return PAM_SUCCESS;
-}
-
-void
-unlock_pwdf(void)
-{
-	return;
-}
-#endif
-
-#ifdef HELPER_COMPILE
-int
-save_old_password(const char *forwho, const char *oldpass,
-		  int howmany)
-#else
-int
-save_old_password(pam_handle_t *pamh, const char *forwho, const char *oldpass,
-		  int howmany)
-#endif
-{
-    static char buf[16384];
-    static char nbuf[16384];
-    char *s_luser, *s_uid, *s_npas, *s_pas, *pass;
-    int npas;
-    FILE *pwfile, *opwfile;
-    int err = 0;
-    int oldmask;
-    int found = 0;
-    struct passwd *pwd = NULL;
-    struct stat st;
-    size_t len = strlen(forwho);
-#ifdef WITH_SELINUX
-    security_context_t prev_context=NULL;
-#endif
-
-    if (howmany < 0) {
-	return PAM_SUCCESS;
-    }
-
-    if (oldpass == NULL) {
-	return PAM_SUCCESS;
-    }
-
-    oldmask = umask(077);
-
-#ifdef WITH_SELINUX
-    if (SELINUX_ENABLED) {
-      security_context_t passwd_context=NULL;
-      if (getfilecon("/etc/passwd",&passwd_context)<0) {
-        return PAM_AUTHTOK_ERR;
-      };
-      if (getfscreatecon(&prev_context)<0) {
-        freecon(passwd_context);
-        return PAM_AUTHTOK_ERR;
-      }
-      if (setfscreatecon(passwd_context)) {
-        freecon(passwd_context);
-        freecon(prev_context);
-        return PAM_AUTHTOK_ERR;
-      }
-      freecon(passwd_context);
-    }
-#endif
-    pwfile = fopen(OPW_TMPFILE, "w");
-    umask(oldmask);
-    if (pwfile == NULL) {
-      err = 1;
-      goto done;
-    }
-
-    opwfile = fopen(OLD_PASSWORDS_FILE, "r");
-    if (opwfile == NULL) {
-	fclose(pwfile);
-      err = 1;
-      goto done;
-    }
-
-    if (fstat(fileno(opwfile), &st) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-
-    if (fchown(fileno(pwfile), st.st_uid, st.st_gid) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-    if (fchmod(fileno(pwfile), st.st_mode) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-
-    while (fgets(buf, 16380, opwfile)) {
-	if (!strncmp(buf, forwho, len) && strchr(":,\n", buf[len]) != NULL) {
-	    char *sptr = NULL;
-	    found = 1;
-	    if (howmany == 0)
-		continue;
-	    buf[strlen(buf) - 1] = '\0';
-	    s_luser = strtok_r(buf, ":", &sptr);
-	    if (s_luser == NULL) {
-		found = 0;
-		continue;
-	    }
-	    s_uid = strtok_r(NULL, ":", &sptr);
-	    if (s_uid == NULL) {
-		found = 0;
-		continue;
-	    }
-	    s_npas = strtok_r(NULL, ":", &sptr);
-	    if (s_npas == NULL) {
-		found = 0;
-		continue;
-	    }
-	    s_pas = strtok_r(NULL, ":", &sptr);
-	    npas = strtol(s_npas, NULL, 10) + 1;
-	    while (npas > howmany && s_pas != NULL) {
-		s_pas = strpbrk(s_pas, ",");
-		if (s_pas != NULL)
-		    s_pas++;
-		npas--;
-	    }
-	    pass = crypt_md5_wrapper(oldpass);
-	    if (s_pas == NULL)
-		snprintf(nbuf, sizeof(nbuf), "%s:%s:%d:%s\n",
-			 s_luser, s_uid, npas, pass);
-	    else
-		snprintf(nbuf, sizeof(nbuf),"%s:%s:%d:%s,%s\n",
-			 s_luser, s_uid, npas, s_pas, pass);
-	    _pam_delete(pass);
-	    if (fputs(nbuf, pwfile) < 0) {
-		err = 1;
-		break;
-	    }
-	} else if (fputs(buf, pwfile) < 0) {
-	    err = 1;
-	    break;
-	}
-    }
-    fclose(opwfile);
-
-    if (!found) {
-	pwd = pam_modutil_getpwnam(pamh, forwho);
-	if (pwd == NULL) {
-	    err = 1;
-	} else {
-	    pass = crypt_md5_wrapper(oldpass);
-	    snprintf(nbuf, sizeof(nbuf), "%s:%lu:1:%s\n",
-		     forwho, (unsigned long)pwd->pw_uid, pass);
-	    _pam_delete(pass);
-	    if (fputs(nbuf, pwfile) < 0) {
-		err = 1;
-	    }
-	}
-    }
-
-    if (fflush(pwfile) || fsync(fileno(pwfile))) {
-	D(("fflush or fsync error writing entries to old passwords file: %m"));
-	err = 1;
-    }
-
-    if (fclose(pwfile)) {
-	D(("fclose error writing entries to old passwords file: %m"));
-	err = 1;
-    }
-
-done:
-    if (!err) {
-	if (rename(OPW_TMPFILE, OLD_PASSWORDS_FILE))
-	    err = 1;
-    }
-#ifdef WITH_SELINUX
-    if (SELINUX_ENABLED) {
-      if (setfscreatecon(prev_context)) {
-        err = 1;
-      }
-      if (prev_context)
-        freecon(prev_context);
-      prev_context=NULL;
-    }
-#endif
-    if (!err) {
-	return PAM_SUCCESS;
-    } else {
-	unlink(OPW_TMPFILE);
-	return PAM_AUTHTOK_ERR;
-    }
-}
-
-PAMH_ARG_DECL(int unix_update_passwd,
-	const char *forwho, const char *towhat)
-{
-    struct passwd *tmpent = NULL;
-    struct stat st;
-    FILE *pwfile, *opwfile;
-    int err = 1;
-    int oldmask;
-#ifdef WITH_SELINUX
-    security_context_t prev_context=NULL;
-#endif
-
-    oldmask = umask(077);
-#ifdef WITH_SELINUX
-    if (SELINUX_ENABLED) {
-      security_context_t passwd_context=NULL;
-      if (getfilecon("/etc/passwd",&passwd_context)<0) {
-	return PAM_AUTHTOK_ERR;
-      };
-      if (getfscreatecon(&prev_context)<0) {
-	freecon(passwd_context);
-	return PAM_AUTHTOK_ERR;
-      }
-      if (setfscreatecon(passwd_context)) {
-	freecon(passwd_context);
-	freecon(prev_context);
-	return PAM_AUTHTOK_ERR;
-      }
-      freecon(passwd_context);
-    }
-#endif
-    pwfile = fopen(PW_TMPFILE, "w");
-    umask(oldmask);
-    if (pwfile == NULL) {
-      err = 1;
-      goto done;
-    }
-
-    opwfile = fopen("/etc/passwd", "r");
-    if (opwfile == NULL) {
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-
-    if (fstat(fileno(opwfile), &st) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-
-    if (fchown(fileno(pwfile), st.st_uid, st.st_gid) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-    if (fchmod(fileno(pwfile), st.st_mode) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-
-    tmpent = fgetpwent(opwfile);
-    while (tmpent) {
-	if (!strcmp(tmpent->pw_name, forwho)) {
-	    /* To shut gcc up */
-	    union {
-		const char *const_charp;
-		char *charp;
-	    } assigned_passwd;
-	    assigned_passwd.const_charp = towhat;
-
-	    tmpent->pw_passwd = assigned_passwd.charp;
-	    err = 0;
-	}
-	if (putpwent(tmpent, pwfile)) {
-	    D(("error writing entry to password file: %m"));
-	    err = 1;
-	    break;
-	}
-	tmpent = fgetpwent(opwfile);
-    }
-    fclose(opwfile);
-
-    if (fflush(pwfile) || fsync(fileno(pwfile))) {
-	D(("fflush or fsync error writing entries to password file: %m"));
-	err = 1;
-    }
-
-    if (fclose(pwfile)) {
-	D(("fclose error writing entries to password file: %m"));
-	err = 1;
-    }
-
-done:
-    if (!err) {
-	if (!rename(PW_TMPFILE, "/etc/passwd"))
-	    pam_syslog(pamh,
-		LOG_NOTICE, "password changed for %s", forwho);
-	else
-	    err = 1;
-    }
-#ifdef WITH_SELINUX
-    if (SELINUX_ENABLED) {
-      if (setfscreatecon(prev_context)) {
-	err = 1;
-      }
-      if (prev_context)
-	freecon(prev_context);
-      prev_context=NULL;
-    }
-#endif
-    if (!err) {
-	return PAM_SUCCESS;
-    } else {
-	unlink(PW_TMPFILE);
-	return PAM_AUTHTOK_ERR;
-    }
-}
-
-PAMH_ARG_DECL(int unix_update_shadow,
-	const char *forwho, char *towhat)
-{
-    struct spwd spwdent, *stmpent = NULL;
-    struct stat st;
-    FILE *pwfile, *opwfile;
-    int err = 0;
-    int oldmask;
-    int wroteentry = 0;
-#ifdef WITH_SELINUX
-    security_context_t prev_context=NULL;
-#endif
-
-    oldmask = umask(077);
-
-#ifdef WITH_SELINUX
-    if (SELINUX_ENABLED) {
-      security_context_t shadow_context=NULL;
-      if (getfilecon("/etc/shadow",&shadow_context)<0) {
-	return PAM_AUTHTOK_ERR;
-      };
-      if (getfscreatecon(&prev_context)<0) {
-	freecon(shadow_context);
-	return PAM_AUTHTOK_ERR;
-      }
-      if (setfscreatecon(shadow_context)) {
-	freecon(shadow_context);
-	freecon(prev_context);
-	return PAM_AUTHTOK_ERR;
-      }
-      freecon(shadow_context);
-    }
-#endif
-    pwfile = fopen(SH_TMPFILE, "w");
-    umask(oldmask);
-    if (pwfile == NULL) {
-	err = 1;
-	goto done;
-    }
-
-    opwfile = fopen("/etc/shadow", "r");
-    if (opwfile == NULL) {
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-
-    if (fstat(fileno(opwfile), &st) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-
-    if (fchown(fileno(pwfile), st.st_uid, st.st_gid) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-    if (fchmod(fileno(pwfile), st.st_mode) == -1) {
-	fclose(opwfile);
-	fclose(pwfile);
-	err = 1;
-	goto done;
-    }
-
-    stmpent = fgetspent(opwfile);
-    while (stmpent) {
-
-	if (!strcmp(stmpent->sp_namp, forwho)) {
-	    stmpent->sp_pwdp = towhat;
-	    stmpent->sp_lstchg = time(NULL) / (60 * 60 * 24);
-	    if (stmpent->sp_lstchg == 0)
-	        stmpent->sp_lstchg = -1; /* Don't request passwort change
-					    only because time isn't set yet. */
-	    wroteentry = 1;
-	    D(("Set password %s for %s", stmpent->sp_pwdp, forwho));
-	}
-
-	if (putspent(stmpent, pwfile)) {
-	    D(("error writing entry to shadow file: %m"));
-	    err = 1;
-	    break;
-	}
-
-	stmpent = fgetspent(opwfile);
-    }
-
-    fclose(opwfile);
-
-    if (!wroteentry && !err) {
-	spwdent.sp_namp = (char *)forwho;
-	spwdent.sp_pwdp = towhat;
-	spwdent.sp_lstchg = time(NULL) / (60 * 60 * 24);
-	if (spwdent.sp_lstchg == 0)
-	    spwdent.sp_lstchg = -1; /* Don't request passwort change
-				       only because time isn't set yet. */
-	spwdent.sp_min = spwdent.sp_max = spwdent.sp_warn = spwdent.sp_inact =
-	    spwdent.sp_expire = -1;
-	spwdent.sp_flag = (unsigned long)-1l;
-	if (putspent(&spwdent, pwfile)) {
-	    D(("error writing entry to shadow file: %m"));
-	    err = 1;
-	}
-    }
-
-    if (fflush(pwfile) || fsync(fileno(pwfile))) {
-	D(("fflush or fsync error writing entries to shadow file: %m"));
-	err = 1;
-    }
-
-    if (fclose(pwfile)) {
-	D(("fclose error writing entries to shadow file: %m"));
-	err = 1;
-    }
-
- done:
-    if (!err) {
-	if (!rename(SH_TMPFILE, "/etc/shadow"))
-	    pam_syslog(pamh,
-		LOG_NOTICE, "password changed for %s", forwho);
-	else
-	    err = 1;
-    }
-
-#ifdef WITH_SELINUX
-    if (SELINUX_ENABLED) {
-      if (setfscreatecon(prev_context)) {
-	err = 1;
-      }
-      if (prev_context)
-	freecon(prev_context);
-      prev_context=NULL;
-    }
-#endif
-
-    if (!err) {
-	return PAM_SUCCESS;
-    } else {
-	unlink(SH_TMPFILE);
-	return PAM_AUTHTOK_ERR;
-    }
 }
 
 #ifdef HELPER_COMPILE

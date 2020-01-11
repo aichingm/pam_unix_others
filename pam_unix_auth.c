@@ -93,7 +93,7 @@ setcred_free (pam_handle_t *pamh UNUSED, void *ptr, int err UNUSED)
 		free (ptr);
 }
 
-int
+PAM_EXTERN int
 pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 {
 	unsigned long long ctrl;
@@ -189,7 +189,7 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
  * warned you. -- AOY
  */
 
-int
+PAM_EXTERN int
 pam_sm_setcred (pam_handle_t *pamh, int flags,
 		int argc, const char **argv)
 {
