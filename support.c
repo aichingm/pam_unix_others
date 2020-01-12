@@ -31,6 +31,14 @@
 #include "support.h"
 #include "passverify.h"
 
+#ifdef USE_ECONF
+#ifdef HAVE_LIBECONF_H
+#include <libeconf.h>
+#else
+#error libeconf not available
+#endif
+#endif
+
 char *
 pam_modutil_search_key(pam_handle_t *pamh UNUSED,
 		       const char *file_name,

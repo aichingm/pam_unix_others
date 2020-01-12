@@ -14,19 +14,20 @@ PREFIX_LIB = /usr/
 SERVICE_DIR = /etc/pam.d/
 TEST_SERVICE = $(MODULE_NAME)-test-service
 
+EXPAND=
 CC ?= gcc
 #-Wconversion -Wsign-conversion a lot warnings
 CFLAGS = -O -W -Werror -Wall -Wextra -Wbad-function-cast -Wcast-align \
 		-Wcast-qual -Wmissing-declarations -Wmissing-prototypes \
 		-Wpointer-arith -Wreturn-type -Wstrict-prototypes \
 		-Wwrite-strings -Winline -Wshadow -Wformat-security \
-		$(CFLAGS_SEC)
+		$(CFLAGS_SEC) $(EXPAND)
 #-mfunction-return=thunk -mindirect-branch=thunk incompatible with -fcf-protection
 CFLAGS_SEC = -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4 \
 		-fstack-clash-protection -fPIC -ftrapv -D_FORTIFY_SOURCE=2 
 #-fvtable-verify=std is not supported in this configuration
 #-Wl,-nxcompat cannot open linker script file ompat: No such file or directory
-LDFLAGS = -lcrypt -laudit -Wl,-z,relro,-z,now -Wl,-z,noexecstack \
+LDFLAGS = @LIBCRYPT@ @LIBAUDIT@ @LIBSELINUX@ @LIBECONF@ -Wl,-z,relro,-z,now -Wl,-z,noexecstack \
 		-fcf-protection=full -Wl,-dynamicbase 
 MODULE_DEFS = -DBUILDING_MODULE
 HELPER_DEFS = -DBUILDING_HELPER
@@ -40,12 +41,12 @@ CKPWD_objs =  md5_good.hlpr_o md5_broken.hlpr_o bigcrypt.hlpr_o \
 			passverify.hlpr_o unix_chkpwd.hlpr_o
 
 .PHONY: build clean nice defchklist deflist ac_headers_list clean-soft \
-		clean-hard easy-rebuild install root artifacts
+		clean-hard easy-rebuild install root artifacts graphs
 
-all: build artifacts
+all: artifacts
 
 clean:
-	rm -rf *.o **/*.o *.hlpr_o **/*.hlpr_o $(ARTIFACTS)
+	rm -rf *.o **/*.o *.hlpr_o **/*.hlpr_o $(ARTIFACTS) graph_$(MODULE_NAME).pdf graph_$(HELPER_NAME).pdf
 
 clean-soft: clean
 	rm -rf autom4te.cache aclocal.m4 config.log config.status ABOUT-NLS \
@@ -104,7 +105,7 @@ install-test-service: root
 	echo "auth required $(MODULE_NAME) try_first_pass nullok audit" >>\
 		$(SERVICE_DIR)$(TEST_SERVICE)
 
-uninstall: root $(PREFIX_BIN)bin/$(HELPER_NAME) $(PREFIX_LIB)lib/security/$(MODULE_NAME)
+uninstall: root
 	rm $(PREFIX_BIN)bin/$(HELPER_NAME)
 	rm $(PREFIX_LIB)lib/security/$(MODULE_NAME)
 	
@@ -113,3 +114,11 @@ uninstall-test-service: root
 
 root: 
 	@[[ $$(id -u) -eq "0" ]] || (echo -e "\e[01;31mYou Need To Be Root!\e[0m" && exit 1)
+
+graphs: clean
+	make $(MODULE_NAME) EXPAND=-fdump-rtl-expand
+	egypt *.233r.expand | dot -Tpdf -o graph_$(MODULE_NAME).pdf
+	rm *.233r.expand
+	make $(HELPER_NAME) EXPAND=-fdump-rtl-expand
+	egypt *.233r.expand | dot -Tpdf -o graph_$(HELPER_NAME).pdf
+	rm *.233r.expand

@@ -14,13 +14,15 @@ AC_USE_SYSTEM_EXTENSIONS
 dnl
 dnl OPTIONS
 dnl
-AC_ARG_ENABLE(debugging,     AS_HELP_STRING([--enable-debugging], [debugging ouput]), opt_debugging=$enableval, opt_debugging=no )
-AC_ARG_ENABLE(audit,         AS_HELP_STRING([--disable-audit],    [audit support]),   WITH_LIBAUDIT=$enableval, WITH_LIBAUDIT=yes)
-AC_ARG_ENABLE(nis,           AS_HELP_STRING([--disable-nis],      [NIS/YP support]),  WITH_NIS=$enableval,      WITH_NIS=yes     )
-AC_ARG_ENABLE(selinux,       AS_HELP_STRING([--disable-selinux],  [SELinux support]), WITH_SELINUX=$enableval,  WITH_SELINUX=yes )
+AC_ARG_ENABLE(econf,     AS_HELP_STRING([--enable-econf],     [libeconf]),            opt_econf=$enableval,     opt_econf=no     )
+AC_ARG_ENABLE(debugging, AS_HELP_STRING([--enable-debugging], [debugging ouput]),     opt_debugging=$enableval, opt_debugging=no )
+AC_ARG_ENABLE(audit,     AS_HELP_STRING([--disable-audit],    [audit support]),       WITH_LIBAUDIT=$enableval, WITH_LIBAUDIT=yes)
+AC_ARG_ENABLE(nis,       AS_HELP_STRING([--disable-nis],      [NIS/YP support]),      WITH_NIS=$enableval,      WITH_NIS=yes     )
+AC_ARG_ENABLE(selinux,   AS_HELP_STRING([--disable-selinux],  [SELinux support]),     WITH_SELINUX=$enableval,  WITH_SELINUX=yes )
 
 AC_ARG_VAR([helper], [The name of the helper program] )
 AC_ARG_VAR([module], [The name of the linkable module])
+
 
 
 dnl
@@ -48,6 +50,7 @@ fi
 dnl crypt
 AS_IF([test "x$ac_cv_header_xcrypt_h" = "xyes"], [crypt_libs="xcrypt crypt"], [crypt_libs="crypt"])
 
+dnl audit
 if test x"$WITH_LIBAUDIT" != xno ; then
   AC_CHECK_HEADER([libaudit.h], 
                   [AC_CHECK_LIB(audit, audit_log_acct_message, LIBAUDIT=-laudit, LIBAUDIT="")
@@ -62,6 +65,12 @@ else
   LIBAUDIT=""
 fi
 
+dnl econf
+if test "$opt_econf" = "yes" ; then
+  LIBECONF="-leconf"
+else
+  LIBECONF=""
+fi
 
 dnl
 dnl SUBSTITUTIONS
@@ -77,7 +86,7 @@ AC_SUBST([LIBAUDIT])
 AC_SUBST([VERSION], [version_def])
 AC_SUBST([PACKAGE], [package_def])
 AC_SUBST([DEBUGGING], $opt_debugging)
-
+AC_SUBST([LIBECONF])
 
 dnl
 dnl DEFINITIONS
@@ -100,6 +109,10 @@ fi
 
 if test ! -z "$LIBAUDIT" -a "$ac_cv_header_libaudit_h" != "no" ; then
   AC_DEFINE([HAVE_LIBAUDIT], 1, [Define to 1 if audit support should be compiled in.])
+fi
+
+if test "$opt_econf" = "yes" ; then
+  AC_DEFINE([USE_LIBAUDIT], [], [Define to force libeconf support])
 fi
 
 if test ! -z "$HAVE_AUDIT_TTY_STATUS" ; then
@@ -202,6 +215,7 @@ AC_CHECK_HEADERS(time.h)
 AC_CHECK_HEADERS(unistd.h)
 AC_CHECK_HEADERS(utmp.h)
 AC_CHECK_HEADERS(xcrypt.h)
+AC_CHECK_HEADERS(libeconf.h)
 
 
 dnl Checks for consts, typedefs, structures.
