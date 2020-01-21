@@ -179,40 +179,7 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 	AUTH_RETURN;
 }
 
-
-/*
- * The only thing _pam_set_credentials_unix() does is initialization of
- * UNIX group IDs.
- *
- * Well, everybody but me on linux-pam is convinced that it should not
- * initialize group IDs, so I am not doing it but don't say that I haven't
- * warned you. -- AOY
- */
-
 PAM_EXTERN int
-pam_sm_setcred (pam_handle_t *pamh, int flags,
-		int argc, const char **argv)
-{
-	int retval;
-	const void *pretval = NULL;
-	unsigned long long ctrl;
-
-	D(("called."));
-
-	ctrl = _set_ctrl(pamh, flags, NULL, NULL, NULL, argc, argv);
-
-	retval = PAM_SUCCESS;
-
-	D(("recovering return code from auth call"));
-	/* We will only find something here if UNIX_LIKE_AUTH is set --
-	   don't worry about an explicit check of argv. */
-	if (on(UNIX_LIKE_AUTH, ctrl)
-	    && pam_get_data(pamh, "unix_setcred_return", &pretval) == PAM_SUCCESS
-	    && pretval) {
-	        retval = *(const int *)pretval;
-		pam_set_data(pamh, "unix_setcred_return", NULL, NULL);
-		D(("recovered data indicates that old retval was %d", retval));
-	}
-
-	return retval;
+pam_sm_setcred (UNUSED pam_handle_t *pamh, UNUSED int flags, UNUSED int argc, UNUSED const char **argv) {
+  return PAM_SUCCESS;
 }
