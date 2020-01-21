@@ -24,11 +24,11 @@ CFLAGS = -O -W -Werror -Wall -Wextra -Wbad-function-cast -Wcast-align \
 		$(CFLAGS_SEC) $(EXPAND)
 #-mfunction-return=thunk -mindirect-branch=thunk incompatible with -fcf-protection
 CFLAGS_SEC = -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4 \
-		-fstack-clash-protection -fPIC -ftrapv -D_FORTIFY_SOURCE=2 
+		-fstack-clash-protection -fPIC -ftrapv -D_FORTIFY_SOURCE=2
 #-fvtable-verify=std is not supported in this configuration
 #-Wl,-nxcompat cannot open linker script file ompat: No such file or directory
 LDFLAGS = @LIBCRYPT@ @LIBAUDIT@ @LIBSELINUX@ @LIBECONF@ -Wl,-z,relro,-z,now -Wl,-z,noexecstack \
-		-fcf-protection=full -Wl,-dynamicbase 
+		-fcf-protection=full -Wl,-dynamicbase
 MODULE_DEFS = -DBUILDING_MODULE
 HELPER_DEFS = -DBUILDING_HELPER
 
@@ -37,8 +37,8 @@ ARTIFACTS = $(MODULE_NAME) $(HELPER_NAME)
 
 PAM_UNIX_OTHERS_objs = pam_unix_auth.o bigcrypt.o support.o passverify.o \
 			md5_good.o md5_broken.o
-CKPWD_objs =  md5_good.hlpr_o md5_broken.hlpr_o bigcrypt.hlpr_o \
-			passverify.hlpr_o unix_chkpwd.hlpr_o
+CKPWD_objs =  md5_good.hlpr.o md5_broken.hlpr.o bigcrypt.hlpr.o \
+			passverify.hlpr.o unix_chkpwd.hlpr.o
 
 .PHONY: build clean nice defchklist deflist ac_headers_list clean-soft \
 		clean-hard easy-rebuild install root artifacts graphs
@@ -46,7 +46,7 @@ CKPWD_objs =  md5_good.hlpr_o md5_broken.hlpr_o bigcrypt.hlpr_o \
 all: artifacts
 
 clean:
-	rm -rf *.o **/*.o *.hlpr_o **/*.hlpr_o $(ARTIFACTS) graph_$(MODULE_NAME).pdf graph_$(HELPER_NAME).pdf
+	rm -rf *.o **/*.o *.hlpr.o **/*.hlpr.o $(ARTIFACTS) graph_$(MODULE_NAME).pdf graph_$(HELPER_NAME).pdf
 
 clean-soft: clean
 	rm -rf autom4te.cache aclocal.m4 config.log config.status ABOUT-NLS \
@@ -64,12 +64,12 @@ $(MODULE_NAME): $(PAM_UNIX_OTHERS_objs)
 	$(CC) -shared -Wl,-soname,$(MODULE_NAME) $(LDFLAGS) -o $@ $^
 
 pam_unix_auth.o: pam_unix_auth.c
-	$(CC) $(CFLAGS) $(LDFLAGS) $(MODULE_DEFS) -c $^ -o $@ 
+	$(CC) $(CFLAGS) $(LDFLAGS) $(MODULE_DEFS) -c $^ -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(LDFLAGS) $(MODULE_DEFS) -c -o $@ $<
 
-%.hlpr_o: %.c
+%.hlpr.o: %.c
 	$(CC) $(CFLAGS) $(LDFLAGS) $(HELPER_DEFS) -c -o $@ $<
 
 GREP_C_H_NOFILE = --no-filename --include="*.c" --include="*.h"
@@ -82,7 +82,7 @@ defchklist:
 	@grep "#if not def" .   -R $(GREP_C_H_NOFILE) | sort | uniq
 	@grep "#elifndef" .     -R $(GREP_C_H_NOFILE) | sort | uniq
 	@grep "#elif not def" . -R $(GREP_C_H_NOFILE) | sort | uniq
-	
+
 deflist:
 	@grep "#define" . -R $(GREP_C_H_NOFILE) | sort | uniq
 
@@ -108,11 +108,11 @@ install-test-service: root
 uninstall: root
 	rm $(PREFIX_BIN)bin/$(HELPER_NAME)
 	rm $(PREFIX_LIB)lib/security/$(MODULE_NAME)
-	
+
 uninstall-test-service: root
 	rm $(SERVICE_DIR)$(TEST_SERVICE)
 
-root: 
+root:
 	@[[ $$(id -u) -eq "0" ]] || (echo -e "\e[01;31mYou Need To Be Root!\e[0m" && exit 1)
 
 graphs: clean

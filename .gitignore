@@ -9,3 +9,7 @@ config.status
 configure
 Makefile
 tools/
+*.o
+*.so
+*.pdf
+unix_others_chkpwd
