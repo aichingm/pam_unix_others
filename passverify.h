@@ -15,9 +15,6 @@
 int
 is_pwd_shadowed(const struct passwd *pwd);
 
-char *
-crypt_md5_wrapper(const char *pass_new);
-
 #ifdef HELPER_COMPILE
 int
 save_old_password(const char *forwho, const char *oldpass,
@@ -55,9 +52,6 @@ read_passwords(int fd, int npass, char **passwords);
 
 PAMH_ARG_DECL(int verify_pwd_hash,
 	const char *p, char *hash, unsigned int nullok);
-
-PAMH_ARG_DECL(char * create_password_hash,
-	const char *password, unsigned long long ctrl, int rounds);
 
 PAMH_ARG_DECL(int get_account_info,
 	const char *name, struct passwd **pwd, struct spwd **spwdent);

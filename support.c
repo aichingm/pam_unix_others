@@ -124,20 +124,6 @@ pam_modutil_search_key(pam_handle_t *pamh UNUSED,
 	return retval;
 }
 
-
-/* this is a front-end for module-application conversations */
-
-int _make_remark(pam_handle_t * pamh, unsigned long long ctrl,
-		    int type, const char *text)
-{
-	int retval = PAM_SUCCESS;
-
-	if (off(UNIX__QUIET, ctrl)) {
-		retval = pam_prompt(pamh, type, NULL, "%s", text);
-	}
-	return retval;
-}
-
 /*
  * set the control flags for the UNIX module.
  */
@@ -511,17 +497,6 @@ int _unix_getpwnam(pam_handle_t *pamh, const char *name,
 	}
 
 	return matched;
-}
-
-/*
- * _unix_comsefromsource() is a quick check to see if information about a given
- * user comes from a particular source (just files and nis for now)
- *
- */
-int _unix_comesfromsource(pam_handle_t *pamh,
-			  const char *name, int files, int nis)
-{
-	return _unix_getpwnam(pamh, name, files, nis, NULL);
 }
 
 /*
