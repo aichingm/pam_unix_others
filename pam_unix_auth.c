@@ -58,6 +58,7 @@
 #include <security/pam_ext.h>
 
 #include "support.h"
+#include "log.h"
 
 /*
  * PAM framework looks for these entry-points to pass control to the
@@ -76,8 +77,7 @@
 
 #define AUTH_RETURN						\
 do {									\
-	D(("recording return code for next time [%d]",		\
-				retval));			\
+	D(("recording return code for next time [%d]", retval));			\
 	*ret_data = retval;					\
 	pam_set_data(pamh, "unix_setcred_return",		\
 			 (void *) ret_data, setcred_free);	\
@@ -101,6 +101,8 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 	const char *name;
 	const char *p;
 
+  log_init(PACKAGE_NAME);
+
 	D(("called."));
 
 	ctrl = _set_ctrl(pamh, flags, NULL, NULL, NULL, argc, argv);
@@ -109,58 +111,53 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 	   pam_sm_setcred() and pam_sm_acct_mgmt(). */
 	ret_data = malloc(sizeof(int));
 	if (!ret_data) {
-		D(("cannot malloc ret_data"));
-		pam_syslog(pamh, LOG_CRIT,
-				"pam_unix_auth: cannot allocate ret_data");
+		log_msg(LOG_CRIT, "pam_unix_auth: cannot allocate ret_data");
 		return PAM_BUF_ERR;
 	}
 
 	/* get the user'name' */
 
 	retval = pam_get_user(pamh, &name, NULL);
-	if (retval == PAM_SUCCESS) {
-		/*
-		 * Various libraries at various times have had bugs related to
-		 * '+' or '-' as the first character of a user name. Don't
-		 * allow this characters here.
-		 */
-		if (name == NULL || name[0] == '-' || name[0] == '+') {
-			pam_syslog(pamh, LOG_NOTICE, "bad username [%s]", name);
-			retval = PAM_USER_UNKNOWN;
-			AUTH_RETURN;
-		}
-		if (on(UNIX_DEBUG, ctrl))
-			pam_syslog(pamh, LOG_DEBUG, "username [%s] obtained", name);
-	} else {
+	if (retval != PAM_SUCCESS) {
 		if (retval == PAM_CONV_AGAIN) {
-			D(("pam_get_user/conv() function is not ready yet"));
+			log_rt_debug(on(UNIX_DEBUG, ctrl), "pam_get_user/conv() function is not ready yet");
 			/* it is safe to resume this function so we translate this
 			 * retval to the value that indicates we're happy to resume.
 			 */
 			retval = PAM_INCOMPLETE;
-		} else if (on(UNIX_DEBUG, ctrl)) {
-			pam_syslog(pamh, LOG_DEBUG, "could not obtain username");
+		} else {
+			log_rt_debug(on(UNIX_DEBUG, ctrl), "could not obtain username");
 		}
 		AUTH_RETURN;
 	}
 
-	/* if this user does not have a password... */
+  /*
+    * Various libraries at various times have had bugs related to
+    * '+' or '-' as the first character of a user name. Don't
+    * allow this characters here.
+    */
+  if (name == NULL || name[0] == '-' || name[0] == '+') {
+    log_msg(LOG_NOTICE, "bad username [%s]", name);
+    retval = PAM_USER_UNKNOWN;
+    AUTH_RETURN;
+  }
+  log_rt_debug(on(UNIX_DEBUG, ctrl), "username [%s] obtained", name);
 
+	/* if this user does not have a password... */
 	if (_unix_blankpasswd(pamh, ctrl, name)) {
-		pam_syslog(pamh, LOG_DEBUG, "user [%s] has blank password; authenticated without it", name);
+		log_msg(LOG_DEBUG, "user [%s] has blank password; authenticated without it", name);
 		name = NULL;
 		retval = PAM_SUCCESS;
 		AUTH_RETURN;
 	}
-	/* get this user's authentication token */
 
+	/* get this user's authentication token */
 	retval = pam_get_authtok(pamh, PAM_AUTHTOK, &p , NULL);
 	if (retval != PAM_SUCCESS) {
 		if (retval != PAM_CONV_AGAIN) {
-			pam_syslog(pamh, LOG_CRIT,
-			    "auth could not identify password for [%s]", name);
+			log_msg(LOG_CRIT, "auth could not identify password for [%s]", name);
 		} else {
-			D(("conversation function is not ready yet"));
+			log_rt_debug(on(UNIX_DEBUG, ctrl), "conversation function is not ready yet");
 			/*
 			 * it is safe to resume this function so we translate this
 			 * retval to the value that indicates we're happy to resume.
@@ -181,5 +178,6 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 
 PAM_EXTERN int
 pam_sm_setcred (UNUSED pam_handle_t *pamh, UNUSED int flags, UNUSED int argc, UNUSED const char **argv) {
+  log_msg(LOG_NOTICE, "pam_setcred is not supported in this module");
   return PAM_SUCCESS;
 }
