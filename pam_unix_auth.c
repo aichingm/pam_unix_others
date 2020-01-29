@@ -75,22 +75,25 @@
  *      onto a normal UNIX authentication
  */
 
-#define AUTH_RETURN						\
+#define AUTH_RETURN(X)						\
 do {									\
-	D(("recording return code for next time [%d]", retval));			\
-	*ret_data = retval;					\
+  int _retval = X; \
+  name = p = NULL; \
+	D(("recording return code for next time [%d]", _retval));			\
+	*ret_data = _retval;					\
 	pam_set_data(pamh, "unix_setcred_return",		\
 			 (void *) ret_data, setcred_free);	\
-	D(("done. [%s]", pam_strerror(pamh, retval)));		\
-	return retval;						\
+	D(("done. [%s]", pam_strerror(pamh, _retval)));		\
+	return _retval;						\
 } while (0)
 
 
 static void
 setcred_free (pam_handle_t *pamh UNUSED, void *ptr, int err UNUSED)
 {
-	if (ptr)
+  if (ptr) {
 		free (ptr);
+  }
 }
 
 PAM_EXTERN int
@@ -107,8 +110,7 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 
 	ctrl = _set_ctrl(pamh, flags, NULL, NULL, NULL, argc, argv);
 
-	/* Get a few bytes so we can pass our return value to
-	   pam_sm_setcred() and pam_sm_acct_mgmt(). */
+	/* Get a few bytes so we can pass our return value to pam_sm_setcred() */
 	ret_data = malloc(sizeof(int));
 	if (!ret_data) {
 		log_msg(LOG_CRIT, "pam_unix_auth: cannot allocate ret_data");
@@ -116,7 +118,6 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 	}
 
 	/* get the user'name' */
-
 	retval = pam_get_user(pamh, &name, NULL);
 	if (retval != PAM_SUCCESS) {
 		if (retval == PAM_CONV_AGAIN) {
@@ -124,11 +125,10 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 			/* it is safe to resume this function so we translate this
 			 * retval to the value that indicates we're happy to resume.
 			 */
-			retval = PAM_INCOMPLETE;
-		} else {
-			log_rt_debug(on(UNIX_DEBUG, ctrl), "could not obtain username");
+      AUTH_RETURN(PAM_INCOMPLETE);
 		}
-		AUTH_RETURN;
+    log_rt_debug(on(UNIX_DEBUG, ctrl), "could not obtain username");
+		AUTH_RETURN(retval);
 	}
 
   /*
@@ -138,17 +138,14 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
     */
   if (name == NULL || name[0] == '-' || name[0] == '+') {
     log_msg(LOG_NOTICE, "bad username [%s]", name);
-    retval = PAM_USER_UNKNOWN;
-    AUTH_RETURN;
+    AUTH_RETURN(PAM_USER_UNKNOWN);
   }
   log_rt_debug(on(UNIX_DEBUG, ctrl), "username [%s] obtained", name);
 
-	/* if this user does not have a password... */
-	if (_unix_blankpasswd(pamh, ctrl, name)) {
+	/* if blank passwords are allowed check if this user does not have a password... */
+  if (off(UNIX__NONULL, ctrl) && try_blankpassword(pamh, ctrl, name)) {
 		log_msg(LOG_DEBUG, "user [%s] has blank password; authenticated without it", name);
-		name = NULL;
-		retval = PAM_SUCCESS;
-		AUTH_RETURN;
+		AUTH_RETURN(PAM_SUCCESS);
 	}
 
 	/* get this user's authentication token */
@@ -156,28 +153,24 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 	if (retval != PAM_SUCCESS) {
 		if (retval != PAM_CONV_AGAIN) {
 			log_msg(LOG_CRIT, "auth could not identify password for [%s]", name);
-		} else {
-			log_rt_debug(on(UNIX_DEBUG, ctrl), "conversation function is not ready yet");
-			/*
-			 * it is safe to resume this function so we translate this
-			 * retval to the value that indicates we're happy to resume.
-			 */
-			retval = PAM_INCOMPLETE;
+      AUTH_RETURN(retval);
 		}
-		name = NULL;
-		AUTH_RETURN;
+		/*
+		 * it is safe to resume this function so we translate this
+		 * retval to the value that indicates we're happy to resume.
+		 */
+		log_rt_debug(on(UNIX_DEBUG, ctrl), "conversation function is not ready yet");
+    AUTH_RETURN(PAM_INCOMPLETE);
 	}
 	D(("user=%s, password=[%s]", name, p));
 
 	/* verify the password of this user */
-	retval = _unix_verify_password(pamh, name, p, ctrl);
-	name = p = NULL;
-
-	AUTH_RETURN;
+  AUTH_RETURN(_unix_verify_password(pamh, name, p, ctrl));
 }
 
 PAM_EXTERN int
 pam_sm_setcred (UNUSED pam_handle_t *pamh, UNUSED int flags, UNUSED int argc, UNUSED const char **argv) {
+  D(("called"));
   log_msg(LOG_NOTICE, "pam_setcred is not supported in this module");
   return PAM_SUCCESS;
 }

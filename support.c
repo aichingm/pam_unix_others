@@ -616,14 +616,14 @@ static int _unix_run_helper_binary(pam_handle_t *pamh, const char *passwd,
 }
 
 /*
- * _unix_blankpasswd() is a quick check for a blank password
+ * try_blankpassword() is a quick check for a blank password
  *
  * returns TRUE if user does not have a password
  * - to avoid prompting for one in such cases (CG)
  */
 
 int
-_unix_blankpasswd (pam_handle_t *pamh, unsigned long long ctrl, const char *name)
+try_blankpassword (pam_handle_t *pamh, unsigned long long ctrl, const char *name)
 {
 	struct passwd *pwd = NULL;
 	char *salt = NULL;
@@ -637,37 +637,26 @@ _unix_blankpasswd (pam_handle_t *pamh, unsigned long long ctrl, const char *name
 	 * else (CG)
 	 */
 
-	if (on(UNIX__NONULL, ctrl))
-		return 0;	/* will fail but don't let on yet */
-
 	/* UNIX passwords area */
 
 	retval = get_pwd_hash(pamh, name, &pwd, &salt);
 
 	if (retval == PAM_UNIX_RUN_HELPER) {
 		/* salt will not be set here so we can return immediately */
-		if (_unix_run_helper_binary(pamh, NULL, ctrl, name) == PAM_SUCCESS)
-			return 1;
-		else
-			return 0;
-	}
-
+		return _unix_run_helper_binary(pamh, NULL, ctrl, name) == PAM_SUCCESS;
+  }
 	/* Does this user have a password? */
 	if (salt == NULL) {
-		retval = 0;
-	} else {
-		if (strlen(salt) == 0)
-			retval = 1;
-		else
-			retval = 0;
+    /* no salt? we can safely return*/
+		return 0;
 	}
 
-	/* tidy up */
+  retval = strlen(salt) == 0;
+    /* tidy up */
+  _pam_delete(salt);
 
-	if (salt)
-		_pam_delete(salt);
+  return retval;
 
-	return retval;
 }
 
 int _unix_verify_password(pam_handle_t * pamh, const char *name

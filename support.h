@@ -162,7 +162,7 @@ extern unsigned long long _set_ctrl(pam_handle_t * pamh, int flags,
 extern int _unix_getpwnam (pam_handle_t *pamh,
 			   const char *name, int files, int nis,
 			   struct passwd **ret);
-extern int _unix_blankpasswd(pam_handle_t *pamh, unsigned long long ctrl,
+extern int try_blankpassword(pam_handle_t *pamh, unsigned long long ctrl,
 			     const char *name);
 extern int _unix_verify_password(pam_handle_t * pamh, const char *name,
 				 const char *p, unsigned long long ctrl);
