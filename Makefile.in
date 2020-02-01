@@ -37,8 +37,8 @@ ARTIFACTS = $(MODULE_NAME) $(HELPER_NAME)
 
 PAM_UNIX_OTHERS_objs = pam_unix_auth.o bigcrypt.o support.o passverify.o \
 			md5_good.o md5_broken.o log.o
-CKPWD_objs =  md5_good.hlpr.o md5_broken.hlpr.o bigcrypt.hlpr.o \
-			passverify.hlpr.o unix_chkpwd.hlpr.o log.o
+CKPWD_objs =  log.hlpr.o md5_good.hlpr.o md5_broken.hlpr.o bigcrypt.hlpr.o \
+			passverify.hlpr.o unix_chkpwd.hlpr.o
 
 .PHONY: build clean nice defchklist deflist ac_headers_list clean-soft \
 		clean-hard easy-rebuild install root artifacts graphs
@@ -117,8 +117,8 @@ root:
 
 graphs: clean
 	make $(MODULE_NAME) EXPAND=-fdump-rtl-expand
-	egypt *.233r.expand | dot -Tpdf -o graph_$(MODULE_NAME).pdf
+	egypt --omit log_msg,debug *.233r.expand | dot -Tpdf -o graph_$(MODULE_NAME).pdf
 	rm *.233r.expand
 	make $(HELPER_NAME) EXPAND=-fdump-rtl-expand
-	egypt *.233r.expand | dot -Tpdf -o graph_$(HELPER_NAME).pdf
+	egypt --omit log_msg,debug *.233r.expand | dot -Tpdf -o graph_$(HELPER_NAME).pdf
 	rm *.233r.expand

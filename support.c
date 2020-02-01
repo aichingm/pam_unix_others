@@ -23,13 +23,13 @@
 #include <rpcsvc/ypclnt.h>
 #endif
 
-#include <security/_pam_macros.h>
 #include <security/pam_modules.h>
 #include <security/pam_ext.h>
 #include <security/pam_modutil.h>
 
 #include "support.h"
 #include "passverify.h"
+#include "log.h"
 
 #ifdef USE_ECONF
 #ifdef HAVE_LIBECONF_H
@@ -169,7 +169,7 @@ unsigned long long _set_ctrl(pam_handle_t *pamh, int flags, int *remember,
 	    }
 	  }
 	  if (j >= UNIX_CTRLS_) {
-	    pam_syslog(pamh, LOG_WARNING, "unrecognized ENCRYPT_METHOD value [%s]", val);
+	    log_msg(LOG_WARNING, "unrecognized ENCRYPT_METHOD value [%s]", val);
 	  } else {
 	    ctrl &= unix_args[j].mask;	/* for turning things off */
 	    ctrl |= unix_args[j].flag;	/* for turning things on  */
@@ -202,13 +202,13 @@ unsigned long long _set_ctrl(pam_handle_t *pamh, int flags, int *remember,
 		}
 
 		if (j >= UNIX_CTRLS_) {
-			pam_syslog(pamh, LOG_ERR,
+			log_msg(LOG_ERR,
 			         "unrecognized option [%s]", *argv);
 		} else {
 			/* special cases */
 			if (j == UNIX_REMEMBER_PASSWD) {
 				if (remember == NULL) {
-					pam_syslog(pamh, LOG_ERR,
+					log_msg(LOG_ERR,
 					    "option remember not allowed for this module type");
 					continue;
 				}
@@ -219,14 +219,14 @@ unsigned long long _set_ctrl(pam_handle_t *pamh, int flags, int *remember,
 					*remember = 400;
 			} else if (j == UNIX_MIN_PASS_LEN) {
 				if (pass_min_len == NULL) {
-					pam_syslog(pamh, LOG_ERR,
+					log_msg(LOG_ERR,
 					    "option minlen not allowed for this module type");
 					continue;
 				}
 				*pass_min_len = atoi(*argv + 7);
 			} else if (j == UNIX_ALGO_ROUNDS) {
 				if (rounds == NULL) {
-					pam_syslog(pamh, LOG_ERR,
+					log_msg(LOG_ERR,
 					    "option rounds not allowed for this module type");
 					continue;
 				}
@@ -241,7 +241,7 @@ unsigned long long _set_ctrl(pam_handle_t *pamh, int flags, int *remember,
 	if (UNIX_DES_CRYPT(ctrl)
 	    && pass_min_len && *pass_min_len > 8)
 	  {
-	    pam_syslog (pamh, LOG_NOTICE, "Password minlen reset to 8 characters");
+	    log_msg(LOG_NOTICE, "Password minlen reset to 8 characters");
 	    *pass_min_len = 8;
 	  }
 
@@ -344,7 +344,7 @@ static void _cleanup_failures(pam_handle_t * pamh, void *fl, int err)
 						    &rhost);
 				(void) pam_get_item(pamh, PAM_TTY,
 						    &tty);
-				pam_syslog(pamh, LOG_NOTICE,
+				log_msg(LOG_NOTICE,
 				         "%d more authentication failure%s; "
 				         "logname=%s uid=%d euid=%d "
 				         "tty=%s ruser=%s rhost=%s "
@@ -358,7 +358,7 @@ static void _cleanup_failures(pam_handle_t * pamh, void *fl, int err)
 				);
 
 				if (failure->count > UNIX_MAX_RETRIES) {
-					pam_syslog(pamh, LOG_NOTICE,
+					log_msg(LOG_NOTICE,
 						 "service(%s) ignoring max retries; %d > %d",
 						 service == NULL ? "**unknown**" : (const char *)service,
 						 failure->count,
@@ -506,8 +506,13 @@ int _unix_getpwnam(pam_handle_t *pamh, const char *name,
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#ifndef DEBUGGING
 static int _unix_run_helper_binary(pam_handle_t *pamh, const char *passwd,
 				   unsigned long long ctrl, const char *user)
+#else
+static int _unix_run_helper_binary(pam_handle_t *pamh UNUSED, const char *passwd,
+				   unsigned long long ctrl, const char *user)
+#endif
 {
     int retval, child, fds[2];
     struct sigaction newsa, oldsa;
@@ -539,18 +544,19 @@ static int _unix_run_helper_binary(pam_handle_t *pamh, const char *passwd,
 	static char *envp[] = { NULL };
 
 	/* XXX - should really tidy up PAM here too */
-
 	/* reopen stdin as pipe */
 	if (dup2(fds[0], STDIN_FILENO) != STDIN_FILENO) {
-		pam_syslog(pamh, LOG_ERR, "dup2 of %s failed: %m", "stdin");
+		log_msg(LOG_ERR, "dup2 of %s failed: %m", "stdin");
 		_exit(PAM_AUTHINFO_UNAVAIL);
 	}
-
+#ifndef DEBUGGING
+  /* closes all open fds except stdout and redirects stderr to stdout*/
 	if (pam_modutil_sanitize_helper_fds(pamh, PAM_MODUTIL_IGNORE_FD,
 					    PAM_MODUTIL_PIPE_FD,
 					    PAM_MODUTIL_PIPE_FD) < 0) {
 		_exit(PAM_AUTHINFO_UNAVAIL);
 	}
+#endif
 
 	if (geteuid() == 0) {
           /* must set the real uid to 0 so the helper will not error
@@ -577,13 +583,13 @@ static int _unix_run_helper_binary(pam_handle_t *pamh, const char *passwd,
 	      len = PAM_MAX_RESP_SIZE;
 	    if (write(fds[1], passwd, len) == -1 ||
 	        write(fds[1], "", 1) == -1) {
-	      pam_syslog (pamh, LOG_ERR, "Cannot send password to helper: %m");
+	      log_msg(LOG_ERR, "Cannot send password to helper: %m");
 	      retval = PAM_AUTH_ERR;
 	    }
 	    passwd = NULL;
 	} else {                         /* blank password */
 	    if (write(fds[1], "", 1) == -1) {
-	      pam_syslog (pamh, LOG_ERR, "Cannot send password to helper: %m");
+	      log_msg(LOG_ERR, "Cannot send password to helper: %m");
 	      retval = PAM_AUTH_ERR;
 	    }
 	}
@@ -592,16 +598,16 @@ static int _unix_run_helper_binary(pam_handle_t *pamh, const char *passwd,
 	/* wait for helper to complete: */
 	while ((rc=waitpid(child, &retval, 0)) < 0 && errno == EINTR);
 	if (rc<0) {
-	  pam_syslog(pamh, LOG_ERR, "unix_chkpwd waitpid returned %d: %m", rc);
+	  log_msg(LOG_ERR, "unix_chkpwd waitpid returned %d: %m", rc);
 	  retval = PAM_AUTH_ERR;
 	} else if (!WIFEXITED(retval)) {
-	  pam_syslog(pamh, LOG_ERR, "unix_chkpwd abnormal exit: %d", retval);
+	  log_msg(LOG_ERR, "unix_chkpwd abnormal exit: %d", retval);
 	  retval = PAM_AUTH_ERR;
 	} else {
 	  retval = WEXITSTATUS(retval);
 	}
     } else {
-	D(("fork failed"));
+	log_msg(LOG_CRIT, "Cannot send password to helper: %m");
 	close(fds[0]);
 	close(fds[1]);
 	retval = PAM_AUTH_ERR;
@@ -686,7 +692,7 @@ int _unix_verify_password(pam_handle_t * pamh, const char *name
 
 	data_name = (char *) malloc(sizeof(FAIL_PREFIX) + strlen(name));
 	if (data_name == NULL) {
-		pam_syslog(pamh, LOG_CRIT, "no memory for data-name");
+		log_msg(LOG_CRIT, "no memory for data-name");
 	} else {
 		strcpy(data_name, FAIL_PREFIX);
 		strcpy(data_name + sizeof(FAIL_PREFIX) - 1, name);
@@ -707,12 +713,12 @@ int _unix_verify_password(pam_handle_t * pamh, const char *name
 			if (on(UNIX_AUDIT, ctrl)) {
 				/* this might be a typo and the user has given a password
 				   instead of a username. Careful with this. */
-				pam_syslog(pamh, LOG_NOTICE,
+				log_msg(LOG_NOTICE,
 				         "check pass; user (%s) unknown", name);
 			} else {
 				name = NULL;
 				if (on(UNIX_DEBUG, ctrl) || pwd == NULL) {
-				    pam_syslog(pamh, LOG_NOTICE,
+				    log_msg(LOG_NOTICE,
 				            "check pass; user unknown");
 				} else {
 				    /* don't log failure as another pam module can succeed */
@@ -721,7 +727,7 @@ int _unix_verify_password(pam_handle_t * pamh, const char *name
 			}
 		}
 	} else {
-		retval = verify_pwd_hash(pamh, p, salt, off(UNIX__NONULL, ctrl));
+		retval = verify_pwd_hash(p, salt, off(UNIX__NONULL, ctrl));
 	}
 
 	if (retval == PAM_SUCCESS) {
@@ -780,7 +786,7 @@ int _unix_verify_password(pam_handle_t * pamh, const char *name
 					(void) pam_get_item(pamh, PAM_TTY,
 							    &tty);
 
-					pam_syslog(pamh, LOG_NOTICE,
+					log_msg(LOG_NOTICE,
 					         "authentication failure; "
 					         "logname=%s uid=%d euid=%d "
 					         "tty=%s ruser=%s rhost=%s "
@@ -799,7 +805,7 @@ int _unix_verify_password(pam_handle_t * pamh, const char *name
 				pam_set_data(pamh, data_name, new, _cleanup_failures);
 
 			} else {
-				pam_syslog(pamh, LOG_CRIT,
+				log_msg(LOG_CRIT,
 				         "no memory for failure recorder");
 			}
 		}

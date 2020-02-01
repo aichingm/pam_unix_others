@@ -11,6 +11,9 @@ void debug(const char* format, ...) {
   va_end (args);
   fprintf (stderr, "\n");
 }
+void debug_start(void) {
+  fprintf(stderr, "%s:%d (%s): ", __FILE__, __LINE__, __FUNCTION__);
+}
 
 void log_init(const char* prog_name) {
   openlog(prog_name, LOG_CONS | LOG_PID, LOG_AUTHPRIV);

@@ -28,7 +28,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <security/_pam_macros.h>
 #ifdef HAVE_LIBXCRYPT
 #include <xcrypt.h>
 #elif defined(HAVE_CRYPT_H)
@@ -60,7 +59,6 @@ char *bigcrypt(const char *key, const char *salt)
 	char *cipher_ptr, *plaintext_ptr, *tmp_ptr, *salt_ptr;
 	char keybuf[KEYBUF_SIZE + 1];
 
-	D(("called with key='%s', salt='%s'.", key, salt));
 
 	/* reset arrays */
 	dec_c2_cryptbuf = malloc(CBUF_SIZE);
@@ -135,7 +133,12 @@ char *bigcrypt(const char *key, const char *salt)
 			tmp_ptr = crypt(plaintext_ptr, salt_ptr);
 #endif
 			if (tmp_ptr == NULL) {
-				_pam_overwrite(dec_c2_cryptbuf);
+        register char *__xx__;
+        if ((__xx__=(dec_c2_cryptbuf))) {
+          while (*__xx__) {
+            *__xx__++ = '\0';
+          }
+        }
 				free(dec_c2_cryptbuf);
 				return NULL;
 			}
@@ -148,7 +151,6 @@ char *bigcrypt(const char *key, const char *salt)
 			salt_ptr = cipher_ptr - ESEGMENT_SIZE;
 		}
 	}
-	D(("key=|%s|, salt=|%s|\nbuf=|%s|\n", key, salt, dec_c2_cryptbuf));
 
 #ifdef HAVE_CRYPT_R
 	free(cdata);

@@ -6,6 +6,8 @@
 #define _PAM_UNIX_SUPPORT_H
 
 #include <pwd.h>
+#include <stddef.h>
+#include <security/pam_modules.h>
 
 /*
  * File to read value of ENCRYPT_METHOD from.
@@ -154,6 +156,25 @@ static const UNIX_Ctrls unix_args[UNIX_CTRLS_] =
 	_pam_overwrite(xx);	\
 	_pam_drop(xx);		\
 }
+#define _pam_overwrite(x)        \
+do {                             \
+     register char *__xx__;      \
+     if ((__xx__=(x)))           \
+          while (*__xx__)        \
+               *__xx__++ = '\0'; \
+} while (0)
+
+/*
+ * Don't just free it, forget it too.
+ */
+
+#define _pam_drop(X) \
+do {                 \
+    if (X) {         \
+        free(X);     \
+        X=NULL;      \
+    }                \
+} while (0)
 
 extern unsigned long long _set_ctrl(pam_handle_t * pamh, int flags,
 				    int *remember, int *rounds,

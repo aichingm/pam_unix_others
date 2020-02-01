@@ -33,6 +33,7 @@
 #include <security/_pam_macros.h>
 
 #include "passverify.h"
+#include "log.h"
 
 static int _check_expiry(const char *uname)
 {
@@ -43,7 +44,7 @@ static int _check_expiry(const char *uname)
 
 	retval = get_account_info(uname, &pwent, &spent);
 	if (retval != PAM_SUCCESS) {
-		helper_log_err(LOG_ERR, "could not obtain user info (%s)", uname);
+		log_msg(LOG_ERR, "could not obtain user info (%s)", uname);
 		printf("-1\n");
 		return retval;
 	}
@@ -71,7 +72,7 @@ static int _audit_log(int type, const char *uname, int rc)
 			errno == EAFNOSUPPORT)
 			return PAM_SUCCESS;
 
-		helper_log_err(LOG_CRIT, "audit_open() failed: %m");
+		log_msg(LOG_CRIT, "audit_open() failed: %m");
 		return PAM_AUTH_ERR;
 	}
 
@@ -86,6 +87,12 @@ static int _audit_log(int type, const char *uname, int rc)
 	return rc < 0 ? PAM_AUTH_ERR : PAM_SUCCESS;
 }
 #endif
+
+#define RETURN(X) \
+do{int _retval = X; \
+  log_close(); \
+  return _retval; \
+}while(0)
 
 int main(int argc, char *argv[])
 {
@@ -102,6 +109,8 @@ int main(int argc, char *argv[])
 	 */
 	setup_signals();
 
+  log_init(PACKAGE_NAME);
+
 	/*
 	 * we establish that this program is running with non-tty stdin.
 	 * this is to discourage casual use. It does *NOT* prevent an
@@ -112,7 +121,7 @@ int main(int argc, char *argv[])
 	 */
 
 	if (isatty(STDIN_FILENO) || argc != 3 ) {
-		helper_log_err(LOG_NOTICE
+		log_msg(LOG_NOTICE
 		      ,"inappropriate use of Unix helper binary [UID=%d]"
 			 ,getuid());
 #ifdef HAVE_LIBAUDIT
@@ -122,7 +131,7 @@ int main(int argc, char *argv[])
 		 ,"This binary is not designed for running in this way\n"
 		      "-- the system administrator has been informed\n");
 		sleep(10);	/* this should discourage/annoy the user */
-		return PAM_SYSTEM_ERR;
+		RETURN(PAM_SYSTEM_ERR);
 	}
 
 	/*
@@ -140,7 +149,7 @@ int main(int argc, char *argv[])
 	    user = argv[1];
 	    /* no match -> permanently change to the real user and proceed */
 	    if (setuid(getuid()) != 0)
-		return PAM_AUTH_ERR;
+		RETURN(PAM_AUTH_ERR);
 	  }
 	}
 
@@ -148,7 +157,7 @@ int main(int argc, char *argv[])
 
 	if (strcmp(option, "chkexpiry") == 0)
 	  /* Check account information from the shadow file */
-	  return _check_expiry(argv[1]);
+	  RETURN(_check_expiry(argv[1]));
 	/* read the nullok/nonull option */
 	else if (strcmp(option, "nullok") == 0)
 	  nullok = 1;
@@ -165,7 +174,7 @@ int main(int argc, char *argv[])
 	npass = read_passwords(STDIN_FILENO, 1, passwords);
 
 	if (npass != 1) {	/* is it a valid password? */
-		helper_log_err(LOG_DEBUG, "no password supplied");
+		log_msg(LOG_DEBUG, "no password supplied");
 		*pass = '\0';
 	}
 
@@ -186,18 +195,18 @@ int main(int argc, char *argv[])
 			if (getuid() != 0)
 				_audit_log(AUDIT_USER_AUTH, user, PAM_AUTH_ERR);
 #endif
-			helper_log_err(LOG_NOTICE, "password check failed for user (%s)", user);
+			log_msg(LOG_NOTICE, "password check failed for user (%s)", user);
 		}
-		return PAM_AUTH_ERR;
+		RETURN(PAM_AUTH_ERR);
 	} else {
 	        if (getuid() != 0) {
 #ifdef HAVE_LIBAUDIT
-			return _audit_log(AUDIT_USER_AUTH, user, PAM_SUCCESS);
+			RETURN(_audit_log(AUDIT_USER_AUTH, user, PAM_SUCCESS));
 #else
-		        return PAM_SUCCESS;
+		        RETURN(PAM_SUCCESS);
 #endif
 	        }
-		return PAM_SUCCESS;
+		RETURN(PAM_SUCCESS);
 	}
 }
 

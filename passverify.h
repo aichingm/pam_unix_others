@@ -26,8 +26,6 @@ save_old_password(pam_handle_t *pamh, const char *forwho, const char *oldpass,
 #endif
 
 #ifdef HELPER_COMPILE
-void
-helper_log_err(int err, const char *format,...);
 
 int
 helper_verify_password(const char *name, const char *p, int nullok);
@@ -50,7 +48,7 @@ read_passwords(int fd, int npass, char **passwords);
 #define PAMH_ARG(...)			pamh, __VA_ARGS__
 #endif
 
-PAMH_ARG_DECL(int verify_pwd_hash,
+int verify_pwd_hash(
 	const char *p, char *hash, unsigned int nullok);
 
 PAMH_ARG_DECL(int get_account_info,
@@ -59,7 +57,7 @@ PAMH_ARG_DECL(int get_account_info,
 PAMH_ARG_DECL(int get_pwd_hash,
 	const char *name, struct passwd **pwd, char **hash);
 
-PAMH_ARG_DECL(int check_shadow_expiry,
+int check_shadow_expiry(
 	struct spwd *spent, int *daysleft);
 
 /* ****************************************************************** *

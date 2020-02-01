@@ -2,7 +2,6 @@
  * Copyright information at end of file.
  */
 #include "config.h"
-#include <security/_pam_macros.h>
 #include <security/pam_modules.h>
 #include "support.h"
 #include <stdio.h>
@@ -28,6 +27,7 @@
 #include "md5.h"
 #include "bigcrypt.h"
 #include "passverify.h"
+#include "log.h"
 
 #ifdef WITH_SELINUX
 #include <selinux/selinux.h>
@@ -39,11 +39,13 @@
 #ifdef HELPER_COMPILE
 #define pam_modutil_getpwnam(h,n) getpwnam(n)
 #define pam_modutil_getspnam(h,n) getspnam(n)
-#define pam_syslog(h,a,b,c) helper_log_err(a,b,c)
 #else
 #include <security/pam_modutil.h>
 #include <security/pam_ext.h>
 #endif
+
+#include <stdlib.h>
+#define  x_strdup(s)  ( (s) ? strdup(s):NULL )
 
 static void
 strip_hpux_aging(char *hash)
@@ -61,7 +63,7 @@ strip_hpux_aging(char *hash)
 	}
 }
 
-PAMH_ARG_DECL(int verify_pwd_hash,
+int verify_pwd_hash(
 	const char *p, char *hash, unsigned int nullok)
 {
 	size_t hash_len;
@@ -112,7 +114,7 @@ PAMH_ARG_DECL(int verify_pwd_hash,
 				 * pam_syslog() needs a pam handle,
 				 * but that's not available here.
 				 */
-				pam_syslog(pamh, LOG_ERR,
+				log_msg(LOG_ERR,
 				  "The support for password hash \"%.6s\" "
 				  "has been disabled in libcrypt "
 				  "configuration.",
@@ -127,15 +129,11 @@ PAMH_ARG_DECL(int verify_pwd_hash,
 			 * recent implementations of libcrypt.
 			 */
 			if (retval_checksalt == CRYPT_SALT_INVALID) {
-				pam_syslog(pamh, LOG_ERR,
+				log_msg(LOG_ERR,
 				  "The password hash \"%.6s\" is unknown to "
 				  "libcrypt.",
 				  hash);
 			}
-#else
-#ifndef HELPER_COMPILE
-			(void)pamh;
-#endif
 #endif
 #ifdef HAVE_CRYPT_R
 			struct crypt_data *cdata;
@@ -271,7 +269,7 @@ PAMH_ARG_DECL(int get_pwd_hash,
 	return PAM_SUCCESS;
 }
 
-PAMH_ARG_DECL(int check_shadow_expiry,
+int check_shadow_expiry(
 	struct spwd *spent, int *daysleft)
 {
 	long int curdays;
@@ -294,7 +292,7 @@ PAMH_ARG_DECL(int check_shadow_expiry,
 		return PAM_NEW_AUTHTOK_REQD;
 	}
 	if (curdays < spent->sp_lstchg) {
-		pam_syslog(pamh, LOG_DEBUG,
+		log_msg(LOG_DEBUG,
 			 "account %s has password changed in future",
 			 spent->sp_namp);
 		return PAM_SUCCESS;
@@ -346,7 +344,7 @@ helper_verify_password(const char *name, const char *p, int nullok)
 	retval = get_pwd_hash(name, &pwd, &salt);
 
 	if (pwd == NULL || salt == NULL) {
-		helper_log_err(LOG_NOTICE, "check pass; user unknown");
+		log_msg(LOG_NOTICE, "check pass; user unknown");
 		retval = PAM_USER_UNKNOWN;
 	} else {
 		retval = verify_pwd_hash(p, salt, nullok);
@@ -360,18 +358,6 @@ helper_verify_password(const char *name, const char *p, int nullok)
 	p = NULL;		/* no longer needed here */
 
 	return retval;
-}
-
-void
-helper_log_err(int err, const char *format, ...)
-{
-	va_list args;
-
-	va_start(args, format);
-	openlog(HELPER_COMPILE, LOG_CONS | LOG_PID, LOG_AUTHPRIV);
-	vsyslog(err, format, args);
-	va_end(args);
-	closelog();
 }
 
 static void

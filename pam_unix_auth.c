@@ -53,12 +53,14 @@
 #define PAM_SM_AUTH
 
 #define _PAM_EXTERN_FUNCTIONS
-#include <security/_pam_macros.h>
 #include <security/pam_modules.h>
 #include <security/pam_ext.h>
 
 #include "support.h"
 #include "log.h"
+
+
+
 
 /*
  * PAM framework looks for these entry-points to pass control to the
@@ -84,6 +86,7 @@ do {									\
 	pam_set_data(pamh, "unix_setcred_return",		\
 			 (void *) ret_data, setcred_free);	\
 	D(("done. [%s]", pam_strerror(pamh, _retval)));		\
+	log_close();\
 	return _retval;						\
 } while (0)
 
