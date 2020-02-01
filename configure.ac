@@ -22,7 +22,8 @@ AC_ARG_ENABLE(selinux,   AS_HELP_STRING([--disable-selinux],  [SELinux support])
 
 AC_ARG_VAR([helper], [The name of the helper program] )
 AC_ARG_VAR([module], [The name of the linkable module])
-
+AC_ARG_VAR([process_group], [The name of group in which the calling process's user has to be])
+AC_ARG_VAR([user_group], [The name group in which the authenticated user has to be])
 
 
 dnl
@@ -38,6 +39,16 @@ fi
 dnl module
 if test "$module" = "" ; then
     module="pam_unix_others.so"
+fi
+
+dnl process_group
+if test "$process_group" = "" ; then
+    process_group="can_puo"
+fi
+
+dnl user_group
+if test "$user_group" = "" ; then
+    user_group="allow_puo"
 fi
 
 dnl selinux
@@ -78,6 +89,8 @@ dnl
 
 AC_SUBST([HELPER_NAME], $helper)
 AC_SUBST([MODULE_NAME], $module)
+AC_SUBST([PROCESS_GROUP], $process_group)
+AC_SUBST([USER_GROUP], $user_group)
 AC_SUBST([LIBSELINUX])
 AC_SUBST([NIS_CFLAGS])
 AC_SUBST([NIS_LIBS])
@@ -94,6 +107,8 @@ dnl
 
 AC_DEFINE_UNQUOTED([HELPER_NAME], ["$helper"], [Define the name of the helper programm])
 AC_DEFINE_UNQUOTED([MODULE_NAME], ["$module"], [Define the name of the linkable module])
+AC_DEFINE_UNQUOTED([PROCESS_GROUP], ["$process_group"], [Define the name of group in which the calling process's user has to be])
+AC_DEFINE_UNQUOTED([USER_GROUP], ["$user_group"], [Define the name of the group in which the authenticated user has to be])
 
 if test  "$opt_debugging" = "yes" ; then
   AC_DEFINE_UNQUOTED([DEBUGGING], [], [Define if debugging options should be enabled])

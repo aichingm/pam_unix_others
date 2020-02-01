@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <pwd.h>
+#include <grp.h>
 #include <shadow.h>
 #include <signal.h>
 #include <time.h>
@@ -89,13 +90,96 @@ static int _audit_log(int type, const char *uname, int rc)
 }
 #endif
 
+static int proc_in_grp(void)
+{
+  int i, ngroups;
+  gid_t pgroupid, uid, gid;
+  gid_t *groups;
+
+  pgroupid = getegid();
+  uid = getuid();
+  gid = getgid();
+  ngroups = 0;
+  groups = NULL;
+
+  getgrouplist(getuidname(uid), gid, groups, &ngroups);
+  groups = malloc(ngroups * sizeof (gid_t));
+  if(!groups || getgrouplist(getuidname(uid), gid, groups, &ngroups) != ngroups) {
+    log_msg(LOG_CRIT, "failed to obtain groups");
+    return 0;
+  }
+
+  for(i = 0; i < ngroups; i++){
+    if(groups[i] == pgroupid){
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int user_is_allowed(const char* user)
+{
+  int i, ngroups;
+  gid_t ugroupid, uid, gid;
+  gid_t *groups;
+  struct passwd *pw;
+  struct group *gr;
+
+  errno = 0;
+  gr = getgrnam(USER_GROUP);
+  if(errno != 0) {
+    log_msg(LOG_CRIT, "failed to obtain group information");
+    return 0;
+  }
+  if(!gr){
+    log_msg(LOG_ERR, "no such group [%s]", USER_GROUP);
+    return 0;
+  }
+
+  errno = 0;
+  pw = getpwnam(user);
+  if(errno != 0) {
+    log_msg(LOG_CRIT, "failed to obtain user information");
+    return 0;
+  }
+  if(!pw){
+    log_msg(LOG_NOTICE, "no such user [%s]", user);
+    return 0;
+  }
+
+  uid = pw->pw_uid;
+  gid = pw->pw_gid;
+  ugroupid = gr->gr_gid;
+  ngroups = 0;
+  groups = NULL;
+
+  getgrouplist(getuidname(uid), gid, groups, &ngroups);
+  groups = malloc(ngroups * sizeof (gid_t));
+  if(!groups || getgrouplist(getuidname(uid), gid, groups, &ngroups) != ngroups) {
+    log_msg(LOG_CRIT, "failed to obtain groups");
+    return 0;
+  }
+
+  for(i = 0; i < ngroups; i++){
+    if(groups[i] == ugroupid){
+      return 1;
+    }
+  }
+  return 0;
+}
+
+
 #define RETURN(X) \
 do{int _retval = X; \
   log_close(); \
   return _retval; \
 }while(0)
 
+#ifndef DEBUGGING
 int main(int argc, char *argv[])
+#else
+int main(int argc UNUSED, char *argv[])
+#endif
 {
 	char pass[MAXPASS + 1];
 	char *option;
@@ -108,7 +192,9 @@ int main(int argc, char *argv[])
 	/*
 	 * Catch or ignore as many signal as possible.
 	 */
+#ifndef DEBUGGING
 	setup_signals();
+#endif
 
   log_init(PACKAGE_NAME);
 
@@ -120,7 +206,7 @@ int main(int argc, char *argv[])
 	 * which the attacker must already have gained access to the user's
 	 * account).
 	 */
-
+#ifndef DEBUGGING
 	if (isatty(STDIN_FILENO) || argc != 3 ) {
 		log_msg(LOG_NOTICE
 		      ,"inappropriate use of Unix helper binary [UID=%d]"
@@ -134,26 +220,24 @@ int main(int argc, char *argv[])
 		sleep(10);	/* this should discourage/annoy the user */
 		RETURN(PAM_SYSTEM_ERR);
 	}
+#endif
 
 	/*
 	 * Determine what the current user's name is.
 	 * We must thus skip the check if the real uid is 0.
 	 */
-	if (getuid() == 0) {
-	  user=argv[1];
-	}
-	else {
-	  user = getuidname(getuid());
-	  /* if the caller specifies the username, verify that user
-	     matches it */
-	  if (strcmp(user, argv[1])) {
-	    user = argv[1];
-	    /* no match -> permanently change to the real user and proceed */
-	    if (setuid(getuid()) != 0) {
-        RETURN(PAM_AUTH_ERR);
-      }
-	  }
-	}
+  /* test if executing user is in the right group */
+  if(!proc_in_grp()){
+    log_msg(LOG_WARNING, "caller [%s] has no privilege", getuidname(getuid()));
+    RETURN(PAM_SYSTEM_ERR);
+  }
+
+  /* test if the authenticated user is in the right group */
+  user = argv[1];
+  if(!user_is_allowed(user)){
+    log_msg(LOG_NOTICE, "user [%s] can't be authenticated", user);
+    RETURN(PAM_SYSTEM_ERR);
+  }
 
 	option=argv[2];
 

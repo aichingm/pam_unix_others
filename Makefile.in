@@ -7,6 +7,8 @@ VERSION = @VERSION@
 
 MODULE_NAME = @MODULE_NAME@
 HELPER_NAME = @HELPER_NAME@
+PROCESS_GROUP = @PROCESS_GROUP@
+USER_GROUP = @USER_GROUP@
 DEBUGGING = @DEBUGGING@
 
 PREFIX_BIN = /usr/local/
@@ -95,9 +97,14 @@ easy-rebuild: clean-hard
 	./autogen.sh && ./configure
 	$(MAKE) clean-soft
 
-install: root artifacts
+install-groups: root
+	groupadd --force $(USER_GROUP)
+	groupadd --force $(PROCESS_GROUP)
+
+install: install-groups artifacts
 	cp $(HELPER_NAME) $(PREFIX_BIN)bin/
 	cp $(MODULE_NAME) $(PREFIX_LIB)lib/security/
+	chgrp $(PROCESS_GROUP) $(PREFIX_BIN)bin/$(HELPER_NAME)
 	chmod +s $(PREFIX_BIN)bin/$(HELPER_NAME)
 
 install-test-service: root
@@ -105,12 +112,34 @@ install-test-service: root
 	echo "auth required $(MODULE_NAME) try_first_pass nullok audit" >>\
 		$(SERVICE_DIR)$(TEST_SERVICE)
 
+install-test-user: root
+	useradd -M -N -r test_puo
+
 uninstall: root
 	rm $(PREFIX_BIN)bin/$(HELPER_NAME)
 	rm $(PREFIX_LIB)lib/security/$(MODULE_NAME)
 
+uninstall-groups: root
+	groupdel $(USER_GROUP)
+	groupdel $(PROCESS_GROUP)
+
 uninstall-test-service: root
 	rm $(SERVICE_DIR)$(TEST_SERVICE)
+
+uninstall-test-user: root
+	userdel test_puo
+
+my-privilege:
+	sudo usermod -a -G $(PROCESS_GROUP) $$(id -u --name)
+
+remove-my-privilege:
+	sudo gpasswd -d $$(id -u --name) $(PROCESS_GROUP)
+
+me-allowed:
+	sudo usermod -a -G $(USER_GROUP) $$(id -u --name)
+
+remove-me-allowed:
+	sudo gpasswd -d $$(id -u --name) $(USER_GROUP)
 
 root:
 	@[[ $$(id -u) -eq "0" ]] || (echo -e "\e[01;31mYou Need To Be Root!\e[0m" && exit 1)
