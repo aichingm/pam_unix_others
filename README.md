@@ -1,5 +1,3 @@
-This project is under development and the documentation may be ahead or behind the actual code.
-
 # Pam unix others
 
 This project provides a linux-pam authentication module very similar to the pam_unix module (in fact this was originally a fork) but it provides only the auth module and in the auth module only the `authenticate` method. The `pam_setcred` has no effect on the system and only returns `PAM_SUCCESS`.
@@ -16,17 +14,25 @@ Since only root should have read access to `/etc/shadow` either the protection o
 
 ### How would such a setup look like?
 
-cat /etc/pam.d/unix_others
+`cat /etc/pam.d/unix_others`
 
-TODO
+```
+#%PAM-1.0
 
-ls /usr/bin/unix_others_chkpw
+auth      required  pam_unix_others.so try_first_pass nullok  audit
+```
 
-TODO
+`ls -l /usr/bin/unix_others_chkpwd`
 
-ls /usr/lib/security/pam_unix_others.so
+```
+-rwsr-sr-x 1 root can_puo 45048 Feb  2 00:24 /usr/local/bin/unix_others_chkpwd
+```
 
-TODO
+`ls -l /usr/lib/security/pam_unix_others.so`
+
+```
+-rwxr-xr-x 1 root root 53984 Feb  2 00:24 /usr/lib/security/pam_unix_others.so
+```
 
 ## Build
 ```bash
@@ -53,7 +59,8 @@ You must be **root** to install the module.
 
 ### State of development
 
-So far the module is buildable, installable and runable but works exactly like pam_unix's authenticate method. 
+~So far the module is buildable, installable and runable but works exactly like pam_unix's authenticate method.~
+The module and the helper work as intended. The calling process has to be in the group `ca_pou` (unless otherwise configured) and the user which shall be authenticated has to  be in the group `allow_pou` (unless otherwise configured).
 
 ### A shared code base
 
