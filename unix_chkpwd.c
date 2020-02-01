@@ -69,8 +69,9 @@ static int _audit_log(int type, const char *uname, int rc)
 		/* You get these error codes only when the kernel doesn't have
 		 * audit compiled in. */
 		if (errno == EINVAL || errno == EPROTONOSUPPORT ||
-			errno == EAFNOSUPPORT)
+			errno == EAFNOSUPPORT) {
 			return PAM_SUCCESS;
+    }
 
 		log_msg(LOG_CRIT, "audit_open() failed: %m");
 		return PAM_AUTH_ERR;
@@ -148,27 +149,28 @@ int main(int argc, char *argv[])
 	  if (strcmp(user, argv[1])) {
 	    user = argv[1];
 	    /* no match -> permanently change to the real user and proceed */
-	    if (setuid(getuid()) != 0)
-		RETURN(PAM_AUTH_ERR);
+	    if (setuid(getuid()) != 0) {
+        RETURN(PAM_AUTH_ERR);
+      }
 	  }
 	}
 
 	option=argv[2];
 
-	if (strcmp(option, "chkexpiry") == 0)
+	if (strcmp(option, "chkexpiry") == 0) {
 	  /* Check account information from the shadow file */
 	  RETURN(_check_expiry(argv[1]));
 	/* read the nullok/nonull option */
-	else if (strcmp(option, "nullok") == 0)
+  } else if (strcmp(option, "nullok") == 0) {
 	  nullok = 1;
-	else if (strcmp(option, "nonull") == 0)
+  } else if (strcmp(option, "nonull") == 0) {
 	  nullok = 0;
-	else {
+  } else {
 #ifdef HAVE_LIBAUDIT
 	  _audit_log(AUDIT_ANOM_EXEC, getuidname(getuid()), PAM_SYSTEM_ERR);
 #endif
 	  return PAM_SYSTEM_ERR;
-	}
+  }
 	/* read the password from stdin (a pipe from the pam_unix module) */
 
 	npass = read_passwords(STDIN_FILENO, 1, passwords);
@@ -192,8 +194,9 @@ int main(int argc, char *argv[])
 		if (!nullok || !blankpass) {
 			/* no need to log blank pass test */
 #ifdef HAVE_LIBAUDIT
-			if (getuid() != 0)
+			if (getuid() != 0) {
 				_audit_log(AUDIT_USER_AUTH, user, PAM_AUTH_ERR);
+      }
 #endif
 			log_msg(LOG_NOTICE, "password check failed for user (%s)", user);
 		}
