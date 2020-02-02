@@ -221,6 +221,10 @@ int main(int argc UNUSED, char *argv[])
 		RETURN(PAM_SYSTEM_ERR);
 	}
 #endif
+  D(("uid: %ld", getuid()));
+  D(("euid: %ld", geteuid()));
+  D(("gid: %ld", getgid()));
+  D(("egid: %ld", getegid()));
 
   if(geteuid() != 0){
     log_msg(LOG_WARNING, "euid is not 0, is the setuid bit set?");
