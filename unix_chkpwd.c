@@ -222,10 +222,10 @@ int main(int argc UNUSED, char *argv[])
 	}
 #endif
 
-	/*
-	 * Determine what the current user's name is.
-	 * We must thus skip the check if the real uid is 0.
-	 */
+  if(geteuid() != 0){
+    log_msg(LOG_WARNING, "euid is not 0, is the setuid bit set?");
+  }
+
   /* test if executing user is in the right group */
   if(!proc_in_grp()){
     log_msg(LOG_WARNING, "caller [%s] has no privilege", getuidname(getuid()));

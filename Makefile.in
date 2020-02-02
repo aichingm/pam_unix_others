@@ -10,8 +10,9 @@ HELPER_NAME = @HELPER_NAME@
 PROCESS_GROUP = @PROCESS_GROUP@
 USER_GROUP = @USER_GROUP@
 DEBUGGING = @DEBUGGING@
+PREFIX = @prefix@
 
-PREFIX_BIN = /usr/local/
+PREFIX_BIN = $(PREFIX)/
 PREFIX_LIB = /usr/
 SERVICE_DIR = /etc/pam.d/
 TEST_SERVICE = $(MODULE_NAME)-test-service
@@ -31,8 +32,8 @@ CFLAGS_SEC = -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4 \
 #-Wl,-nxcompat cannot open linker script file ompat: No such file or directory
 LDFLAGS = @LIBCRYPT@ @LIBAUDIT@ @LIBSELINUX@ @LIBECONF@ -Wl,-z,relro,-z,now -Wl,-z,noexecstack \
 		-fcf-protection=full -Wl,-dynamicbase
-MODULE_DEFS = -DBUILDING_MODULE
-HELPER_DEFS = -DBUILDING_HELPER
+MODULE_DEFS = -DBUILDING_MODULE -DPREFIX=\"$(PREFIX)\"
+HELPER_DEFS = -DBUILDING_HELPER -DPREFIX=\"$(PREFIX)\"
 
 
 ARTIFACTS = $(MODULE_NAME) $(HELPER_NAME)
@@ -42,8 +43,11 @@ PAM_UNIX_OTHERS_objs = pam_unix_auth.o bigcrypt.o support.o passverify.o \
 CKPWD_objs =  log.hlpr.o md5_good.hlpr.o md5_broken.hlpr.o bigcrypt.hlpr.o \
 			passverify.hlpr.o unix_chkpwd.hlpr.o
 
-.PHONY: build clean nice defchklist deflist ac_headers_list clean-soft \
-		clean-hard easy-rebuild install root artifacts graphs
+.PHONY: all clean clean-soft clean-hard artifacts defchklist deflist \
+ac_headers_list easy-rebuild install uninstall install-groups \
+prepare-artifacts install-test-setuid install-test install-test-service \
+install-test-user uninstall-groups uninstall-test-service uninstall-test-user \
+my-privilege remove-my-privilege me-allowed remove-me-allowed root graphs
 
 all: artifacts
 
@@ -97,15 +101,29 @@ easy-rebuild: clean-hard
 	./autogen.sh && ./configure
 	$(MAKE) clean-soft
 
+install: artifacts
+	mkdir -p $(PREFIX_BIN)bin/
+	mkdir -p $(PREFIX_LIB)lib/security/
+	cp $(HELPER_NAME) $(PREFIX_BIN)bin/
+	cp $(MODULE_NAME) $(PREFIX_LIB)lib/security/
+
+uninstall: root
+	rm $(PREFIX_BIN)bin/$(HELPER_NAME)
+	rm $(PREFIX_LIB)lib/security/$(MODULE_NAME)
+
 install-groups: root
 	groupadd --force $(USER_GROUP)
 	groupadd --force $(PROCESS_GROUP)
 
-install: install-groups artifacts
-	cp $(HELPER_NAME) $(PREFIX_BIN)bin/
-	cp $(MODULE_NAME) $(PREFIX_LIB)lib/security/
+prepare-artifacts: artifacts
+	chgrp $(PROCESS_GROUP) $(HELPER_NAME)
+	chmod +s $(HELPER_NAME)
+
+install-test-setuid: root
 	chgrp $(PROCESS_GROUP) $(PREFIX_BIN)bin/$(HELPER_NAME)
 	chmod +s $(PREFIX_BIN)bin/$(HELPER_NAME)
+
+install-test: install-groups install install-test-setuid install-test-service
 
 install-test-service: root
 	echo "#%PAM-1.0" > $(SERVICE_DIR)$(TEST_SERVICE)
@@ -115,9 +133,6 @@ install-test-service: root
 install-test-user: root
 	useradd -M -N -r test_puo
 
-uninstall: root
-	rm $(PREFIX_BIN)bin/$(HELPER_NAME)
-	rm $(PREFIX_LIB)lib/security/$(MODULE_NAME)
 
 uninstall-groups: root
 	groupdel $(USER_GROUP)

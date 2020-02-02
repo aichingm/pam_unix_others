@@ -567,7 +567,7 @@ static int _unix_run_helper_binary(pam_handle_t *pamh UNUSED, const char *passwd
           }
 	}
 
-	execle("/usr/local/bin/"CHKPWD_HELPER, CHKPWD_HELPER, user, off(UNIX__NONULL, ctrl)?"nullok":"nonull", NULL, envp);
+	execle(PREFIX"/bin/"CHKPWD_HELPER, CHKPWD_HELPER, user, off(UNIX__NONULL, ctrl)?"nullok":"nonull", NULL, envp);
 
 	/* should not get here: exit with error */
 	D(("helper binary is not available"));
