@@ -228,6 +228,7 @@ int main(int argc UNUSED, char *argv[])
 
   if(geteuid() != 0){
     log_msg(LOG_WARNING, "euid is not 0, is the setuid bit set?");
+    RETURN(PAM_SYSTEM_ERR);
   }
 
   /* test if executing user is in the right group */
@@ -282,23 +283,17 @@ int main(int argc UNUSED, char *argv[])
 		if (!nullok || !blankpass) {
 			/* no need to log blank pass test */
 #ifdef HAVE_LIBAUDIT
-			if (getuid() != 0) {
-				_audit_log(AUDIT_USER_AUTH, user, PAM_AUTH_ERR);
-      }
+      _audit_log(AUDIT_USER_AUTH, user, PAM_AUTH_ERR);
 #endif
 			log_msg(LOG_NOTICE, "password check failed for user (%s)", user);
 		}
 		RETURN(PAM_AUTH_ERR);
-	} else {
-	        if (getuid() != 0) {
-#ifdef HAVE_LIBAUDIT
-			RETURN(_audit_log(AUDIT_USER_AUTH, user, PAM_SUCCESS));
-#else
-		        RETURN(PAM_SUCCESS);
-#endif
-	        }
-		RETURN(PAM_SUCCESS);
 	}
+#ifdef HAVE_LIBAUDIT
+			_audit_log(AUDIT_USER_AUTH, user, PAM_SUCCESS);
+#endif
+  D(("unix_others_chkpwd returning successfully"));
+  RETURN(PAM_SUCCESS);
 }
 
 /*
